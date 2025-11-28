@@ -29,32 +29,39 @@ Before installation, ensure you have a Notepad shortcut on your desktop:
 
 ## Installation
 
-### Using UV (Recommended)
+### Using UV (Recommended - Fast!)
 
 **On Windows PowerShell:**
 
 ```powershell
-# Install UV
+# Install UV (if not already installed)
 pip install uv
 
-# Clone or download repository
-cd vision-notepad-bot
+# Navigate to project directory
+cd vision_notepad_bot
 
-# Create virtual environment and install dependencies
+# Create virtual environment
 uv venv
-uv pip install -e .
+
+# Activate virtual environment
+.venv\Scripts\activate
+
+# Install dependencies (blazing fast!)
+uv pip install -r requirements.txt
 ```
 
-### Using pip
+### Using pip (Traditional)
 
 **On Windows PowerShell:**
 
 ```powershell
-# Clone or download repository
-cd vision-notepad-bot
+# Navigate to project directory
+cd vision_notepad_bot
 
 # Create virtual environment
 python -m venv venv
+
+# Activate virtual environment
 venv\Scripts\activate
 
 # Install dependencies
