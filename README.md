@@ -135,18 +135,9 @@ The bot automatically saves annotated screenshots to the `screenshots/` folder s
 - Adjust HSV color range in `config.py`
 
 **Wrong icon clicked:**
-- Verify only one blue icon matches (move other blue icons temporarily)
 - Adjust `LOWER_BLUE` and `UPPER_BLUE` values
 
 **Window not detected:**
 - Install pygetwindow: `pip install pygetwindow`
 - Increase timeout in `wait_for_notepad_to_open()`
-
-## License
-
-MIT License
-
-## Contributing
-
-Contributions welcome! Please open an issue or pull request.
 
