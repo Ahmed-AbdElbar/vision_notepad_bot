@@ -18,33 +18,44 @@ A Python automation bot that uses computer vision to locate and interact with de
 - Python 3.8+
 - Notepad shortcut on desktop
 
+## Prerequisites
+
+Before installation, ensure you have a Notepad shortcut on your desktop:
+
+1. Right-click on Desktop → **New** → **Shortcut**
+2. Type: `notepad.exe` and click **Next**
+3. Name it "Notepad" and click **Finish**
+4. Ensure the icon is visible and not covered by other windows
+
 ## Installation
 
 ### Using UV (Recommended)
 
-```bash
-# Install UV
-curl -LsSf https://astral.sh/uv/install.sh | sh
+**On Windows PowerShell:**
 
-# Clone repository
-git clone https://github.com/yourusername/vision-notepad-bot.git
+```powershell
+# Install UV
+pip install uv
+
+# Clone or download repository
 cd vision-notepad-bot
 
-# Create virtual environment and install
+# Create virtual environment and install dependencies
 uv venv
 uv pip install -e .
 ```
 
 ### Using pip
 
-```bash
-# Clone repository
-git clone https://github.com/yourusername/vision-notepad-bot.git
+**On Windows PowerShell:**
+
+```powershell
+# Clone or download repository
 cd vision-notepad-bot
 
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -52,7 +63,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-```bash
+```powershell
 python main.py
 ```
 
