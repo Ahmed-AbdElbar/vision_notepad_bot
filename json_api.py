@@ -3,22 +3,11 @@ from typing import List, Dict, Optional
 import requests
 
 API_URL = "https://jsonplaceholder.typicode.com/posts"
-REQUEST_TIMEOUT = 10  # seconds
+REQUEST_TIMEOUT = 10
 
 
 def fetch_first_posts(limit: int = 10) -> Optional[List[Dict]]:
-    """
-    Fetch the first `limit` posts from JSONPlaceholder.
-    Returns a list of dicts with keys: userId, id, title, body.
-    
-    Implements graceful error handling:
-    - Network errors (connection, timeout)
-    - HTTP errors (4xx, 5xx)
-    - Invalid JSON responses
-    
-    Returns:
-        List of posts on success, None on any error.
-    """
+    """Fetch posts from JSONPlaceholder API with error handling."""
     print("[json_api] Fetching posts from JSONPlaceholder...")
     
     try:
@@ -41,12 +30,10 @@ def fetch_first_posts(limit: int = 10) -> Optional[List[Dict]]:
         
     except requests.exceptions.ConnectionError as e:
         print(f"[json_api] ERROR: Connection failed - {e}")
-        print("[json_api] Please check your internet connection.")
         return None
         
     except requests.exceptions.HTTPError as e:
         print(f"[json_api] ERROR: HTTP error - {e}")
-        print(f"[json_api] Status code: {e.response.status_code}")
         return None
         
     except requests.exceptions.RequestException as e:
@@ -63,16 +50,7 @@ def fetch_first_posts(limit: int = 10) -> Optional[List[Dict]]:
 
 
 def create_fallback_posts(count: int = 3) -> List[Dict]:
-    """
-    Create fallback posts when API is unavailable.
-    These are minimal test posts that allow the bot to continue operating.
-    
-    Args:
-        count: Number of fallback posts to create
-    
-    Returns:
-        List of fallback post dictionaries
-    """
+    """Create fallback posts when API is unavailable."""
     print(f"[json_api] Creating {count} fallback posts for testing...")
     
     fallback_posts = []

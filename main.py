@@ -9,10 +9,8 @@ def main():
     print("[main] Starting Vision-Based Desktop Automation bot...")
     print("=" * 60)
 
-    # 1) Ensure target directory exists (Desktop/tjm-project)
     target_dir = ensure_target_dir()
 
-    # 2) Fetch posts from JSONPlaceholder with graceful degradation
     posts = fetch_first_posts(limit=10)
     
     if posts is None:
@@ -22,16 +20,14 @@ def main():
         posts = create_fallback_posts(count=3)
     
     if not posts:
-        print("[main] No posts available (neither from API nor fallback). Exiting.")
+        print("[main] No posts available. Exiting.")
         return
 
     print(f"[main] Processing {len(posts)} posts...")
     print("=" * 60 + "\n")
 
-    # 3) Instantiate BotCity DesktopBot
     bot = DesktopBot()
 
-    # 4) Process each post one by one with error handling
     successful = 0
     failed = 0
     
@@ -48,7 +44,6 @@ def main():
             print(f"[main] ✗ Error processing post {post_id}: {e}")
             print(f"[main] Continuing with next post...")
 
-    # 5) Summary
     print("\n" + "=" * 60)
     print(f"[main] Processing complete!")
     print(f"[main] Successful: {successful}/{len(posts)}")

@@ -1,0 +1,23 @@
+[project]
+name = "vision-notepad-bot"
+version = "1.0.0"
+description = "Vision-based desktop automation bot using computer vision to locate and interact with Notepad"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "botcity-framework-core>=0.4.0",
+    "opencv-python>=4.8.0",
+    "mss>=9.0.0",
+    "numpy>=1.24.0",
+    "requests>=2.31.0",
+    "pyautogui>=0.9.54",
+    "pygetwindow>=0.0.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
+
