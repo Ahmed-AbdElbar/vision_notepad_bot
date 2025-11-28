@@ -1,0 +1,7 @@
+botcity-framework-core
+opencv-python
+mss
+numpy
+requests
+pyautogui
+pygetwindow
