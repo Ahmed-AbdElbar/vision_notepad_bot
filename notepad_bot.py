@@ -5,10 +5,16 @@ from typing import Dict, Optional
 
 import pyautogui
 import pygetwindow as gw
+import pyperclip
 from botcity.core import DesktopBot
 
 from config import TARGET_DIR
 from icon_detector import locate_notepad_icon_center
+
+
+class CriticalNotepadError(Exception):
+    """Raised when Notepad fails to open properly after retries - requires graceful shutdown."""
+    pass
 
 
 def ensure_target_dir() -> Path:
@@ -41,10 +47,10 @@ def open_notepad_via_icon(bot: DesktopBot, max_retries: int = 3, retry_delay_sec
     for attempt in range(1, max_retries + 1):
         print(f"[notepad_bot] Attempt {attempt}/{max_retries}...")
         
-        if attempt > 1:
-            print("[notepad_bot] Showing desktop again to clear obscured icons...")
-            pyautogui.hotkey('win', 'd')
-            bot.sleep(int(retry_delay_sec * 1000))
+        # Always show desktop before each attempt to ensure clean state
+        print("[notepad_bot] Ensuring desktop is shown...")
+        pyautogui.hotkey('win', 'd')
+        bot.sleep(500)  # Give time for desktop to be displayed
         
         center = locate_notepad_icon_center(save_screenshot=save_screenshot, post_id=post_id)
         if center is not None:
@@ -61,68 +67,122 @@ def open_notepad_via_icon(bot: DesktopBot, max_retries: int = 3, retry_delay_sec
     return False
 
 
-def wait_for_notepad_to_open(bot: DesktopBot, timeout_sec: float = 10.0) -> bool:
-    """Wait for Notepad window to appear and validate."""
+def _is_notepad_window(window) -> bool:
+    """Check if a window is Notepad."""
+    if not window.visible:
+        return False
+    
+    title = window.title.lower()
+    # Notepad windows: "Untitled - Notepad", "filename.txt - Notepad", or just "Notepad"
+    return ('notepad' in title and 
+            (title.endswith('- notepad') or title == 'notepad'))
+
+
+def get_wrong_applications_opened(bot: DesktopBot) -> list:
+    """Detect if wrong applications opened (not Notepad)."""
+    try:
+        all_windows = gw.getAllWindows()
+        wrong_apps = []
+        
+        for w in all_windows:
+            if not w.visible or not w.title:
+                continue
+            
+            title_lower = w.title.lower()
+            
+            # Skip system windows and expected windows
+            if any(skip in title_lower for skip in ['program manager', 'taskbar', 'desktop', 'cursor', 'powershell', 'cmd']):
+                continue
+            
+            # If it's not Notepad and it's visible, it might be wrong app
+            if not _is_notepad_window(w):
+                wrong_apps.append(w.title)
+        
+        return wrong_apps
+    except Exception as e:
+        print(f"[notepad_bot] Error detecting wrong applications: {e}")
+        return []
+
+
+def wait_for_notepad_to_open(bot: DesktopBot, timeout_sec: float = 10.0) -> tuple[bool, Optional[str]]:
+    """
+    Wait for Notepad window to appear and validate.
+    
+    Returns:
+        (success: bool, error_message: Optional[str])
+    """
     print("[notepad_bot] Waiting for Notepad window to open (validating)...")
     start = time.time()
     check_interval = 0.5
     
     while time.time() - start < timeout_sec:
         try:
-            notepad_windows = [w for w in gw.getAllWindows() 
-                             if w.visible and 
-                             (w.title.endswith('- Notepad') or 
-                              w.title == 'Notepad' or
-                              w.title.startswith('Untitled') and '- Notepad' in w.title)]
+            all_windows = gw.getAllWindows()
+            notepad_windows = [w for w in all_windows if _is_notepad_window(w)]
             
             if notepad_windows:
-                print(f"[notepad_bot] Notepad window detected: '{notepad_windows[0].title}'")
+                print(f"[notepad_bot] ✓ Notepad window detected: '{notepad_windows[0].title}'")
                 bot.sleep(500)
-                return True
+                return True, None
+            
+            # Check if wrong application opened
+            elapsed = time.time() - start
+            if elapsed > 3.0:  # After 3 seconds, check for wrong apps
+                wrong_apps = get_wrong_applications_opened(bot)
+                if wrong_apps:
+                    error_msg = f"Wrong application(s) opened instead of Notepad: {', '.join(wrong_apps[:3])}"
+                    print(f"[notepad_bot] ✗ {error_msg}")
+                    return False, error_msg
+                    
         except Exception as e:
             print(f"[notepad_bot] Error checking windows: {e}")
         
         bot.sleep(int(check_interval * 1000))
     
-    print(f"[notepad_bot] Timeout: Notepad window not detected after {timeout_sec}s.")
-    return False
-
-
-def handle_file_not_found_popup(bot: DesktopBot) -> bool:
-    """Handle 'file doesn't exist' popup if present."""
-    print("[notepad_bot] Checking for 'file doesn't exist' popup...")
-    
-    time.sleep(0.4)
-    pyautogui.press('enter')
-    print("[notepad_bot]   Pressed Enter to dismiss any popup")
-    time.sleep(0.3)
-    
-    print("[notepad_bot] ✓ Popup handling complete")
-    return True
+    error_msg = f"Timeout: Notepad window not detected after {timeout_sec}s"
+    print(f"[notepad_bot] ✗ {error_msg}")
+    return False, error_msg
 
 
 def open_new_notepad_tab(bot: DesktopBot) -> None:
-    """Open new Notepad tab using Ctrl+N."""
+    """Open new Notepad tab using Ctrl+N, ensuring clean new tab without affecting existing files."""
     print("[notepad_bot] Opening new Notepad tab (Ctrl+N)...")
     
+    # Open new tab
     pyautogui.hotkey('ctrl', 'n')
-    bot.sleep(600)
+    bot.sleep(2000)  # Wait for new tab to fully load and get focus
     
-    handle_file_not_found_popup(bot)
+    # Handle potential "file not found" or other popup dialogs
+    # Strategy: Press Enter to dismiss popup, then click on text area BEFORE any other keys
+    # This ensures Enter goes to the popup (if exists) and not to the document
+    print("[notepad_bot] Checking for and dismissing any popup dialogs...")
+    pyautogui.press('enter')  # Dismiss popup if present
+    bot.sleep(400)
     
+    # Immediately click in the text area to ensure focus is on the NEW tab's editor
+    # This prevents any subsequent keystrokes from affecting other tabs/files
+    print("[notepad_bot] Setting focus on new tab text area...")
+    pyautogui.click(960, 540)
+    bot.sleep(300)
+    
+    # Now safely clear any content that might be in THIS tab only
+    # The Enter keystroke from popup dismissal might have created a newline
+    # So we select all and delete to ensure a clean slate
     pyautogui.hotkey('ctrl', 'a')
     bot.sleep(100)
     pyautogui.press('delete')
     bot.sleep(200)
+    
+    print("[notepad_bot] ✓ New tab ready for input")
 
 
 def type_post_content(bot: DesktopBot, post: Dict) -> None:
-    """Type post content into Notepad."""
+    """Type post content into Notepad using clipboard paste."""
     post_id = post.get("id")
     title = post.get("title", "")
     body = post.get("body", "")
 
-    print(f"[notepad_bot] Typing post id={post_id} into Notepad...")
+    print(f"[notepad_bot] Pasting post id={post_id} into Notepad...")
     print(f"[notepad_bot] Title length: {len(title)} chars")
     print(f"[notepad_bot] Body length: {len(body)} chars")
 
@@ -131,7 +191,11 @@ def type_post_content(bot: DesktopBot, post: Dict) -> None:
     print(f"[notepad_bot] Total content length: {len(content)} chars")
 
     bot.sleep(300)
-    pyautogui.write(content, interval=0.02)
+    
+    # Copy to clipboard and paste (MUCH FASTER than typing!)
+    pyperclip.copy(content)
+    pyautogui.hotkey('ctrl', 'v')
+    
     bot.sleep(500)
 
 
@@ -155,8 +219,12 @@ def save_current_notepad_file(bot: DesktopBot, directory: Path, filename: str) -
     bot.sleep(200)
     
     full_path_str = str(full_path)
-    print(f"[notepad_bot] Typing file path ({len(full_path_str)} characters)...")
-    pyautogui.write(full_path_str, interval=0.01)
+    print(f"[notepad_bot] Pasting file path ({len(full_path_str)} characters)...")
+    
+    # Copy to clipboard and paste (MUCH FASTER than typing!)
+    pyperclip.copy(full_path_str)
+    pyautogui.hotkey('ctrl', 'v')
+    
     bot.sleep(500)
     
     pyautogui.press('enter')
@@ -194,6 +262,33 @@ def close_notepad(bot: DesktopBot) -> None:
     bot.sleep(1000)
 
 
+def graceful_shutdown(bot: DesktopBot, reason: str) -> None:
+    """Perform graceful shutdown of the bot."""
+    print("\n" + "!" * 60)
+    print("[notepad_bot] GRACEFUL SHUTDOWN INITIATED")
+    print(f"[notepad_bot] Reason: {reason}")
+    print("!" * 60)
+    
+    # Try to close any open Notepad windows
+    try:
+        print("[notepad_bot] Attempting to close any open applications...")
+        notepad_windows = [w for w in gw.getAllWindows() if _is_notepad_window(w)]
+        if notepad_windows:
+            print(f"[notepad_bot] Found {len(notepad_windows)} Notepad window(s), closing...")
+            pyautogui.hotkey('alt', 'f4')
+            bot.sleep(500)
+            # Don't save if prompted
+            pyautogui.press('tab')
+            bot.sleep(200)
+            pyautogui.press('enter')
+            bot.sleep(500)
+    except Exception as e:
+        print(f"[notepad_bot] Error during cleanup: {e}")
+    
+    print("[notepad_bot] Shutdown complete. Bot stopped.")
+    print("!" * 60 + "\n")
+
+
 def process_single_post(bot: DesktopBot, post: Dict, target_dir: Path) -> None:
     """Process a single post: open Notepad, type content, save, close."""
     post_id = post.get("id")
@@ -204,35 +299,25 @@ def process_single_post(bot: DesktopBot, post: Dict, target_dir: Path) -> None:
     print(f"[notepad_bot] Processing post id={post_id}...")
     print(f"{'='*60}")
     
-    show_desktop(bot)
-    
+    # Note: show_desktop is now called within open_notepad_via_icon before each attempt
     clicked = open_notepad_via_icon(bot, max_retries=3, retry_delay_sec=1.0, 
                                     save_screenshot=True, post_id=post_id)
     if not clicked:
-        raise RuntimeError(
-            "Notepad icon could not be found after multiple attempts. "
-            "Possible causes:\n"
-            "  - Icon not on desktop\n"
-            "  - Icon obscured by windows\n"
-            "  - Desktop background affects detection\n"
-            "  - Icon color/size outside detection parameters"
+        error_msg = (
+            "Notepad icon could not be found after 3 attempts. "
+            "Possible causes: Icon not on desktop, obscured by windows, "
+            "or desktop background affects detection."
         )
+        raise CriticalNotepadError(error_msg)
 
-    opened = wait_for_notepad_to_open(bot, timeout_sec=10.0)
+    opened, error_msg = wait_for_notepad_to_open(bot, timeout_sec=10.0)
     if not opened:
-        raise RuntimeError(
-            "Notepad window not detected after clicking icon. "
-            "The application may have failed to launch."
-        )
+        full_error = f"Notepad failed to open after clicking icon. {error_msg or 'Unknown reason'}"
+        raise CriticalNotepadError(full_error)
     
     bot.sleep(500)
-    popup_found = handle_file_not_found_popup(bot)
     
-    if popup_found:
-        bot.sleep(300)
-        pyautogui.click(960, 540)
-        bot.sleep(200)
-    
+    # Open new tab (handles any popups safely without affecting existing files)
     open_new_notepad_tab(bot)
     type_post_content(bot, post)
 

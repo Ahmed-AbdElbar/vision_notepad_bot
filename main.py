@@ -1,8 +1,9 @@
 # main.py
+import sys
 from botcity.core import DesktopBot
 
 from json_api import fetch_first_posts, create_fallback_posts
-from notepad_bot import ensure_target_dir, process_single_post
+from notepad_bot import ensure_target_dir, process_single_post, graceful_shutdown, CriticalNotepadError
 
 
 def main():
@@ -30,6 +31,8 @@ def main():
 
     successful = 0
     failed = 0
+    consecutive_critical_failures = 0
+    max_consecutive_failures = 3
     
     for post in posts:
         post_id = post.get('id', 'unknown')
@@ -37,10 +40,24 @@ def main():
             print(f"\n[main] --- Processing post {post_id} ({successful + failed + 1}/{len(posts)}) ---")
             process_single_post(bot, post, target_dir)
             successful += 1
+            consecutive_critical_failures = 0  # Reset on success
             print(f"[main] ✓ Post {post_id} completed successfully")
             
+        except CriticalNotepadError as e:
+            failed += 1
+            consecutive_critical_failures += 1
+            print(f"[main] ✗ CRITICAL ERROR processing post {post_id}: {e}")
+            
+            if consecutive_critical_failures >= max_consecutive_failures:
+                print(f"\n[main] ⚠️  {consecutive_critical_failures} consecutive critical failures detected!")
+                graceful_shutdown(bot, f"Failed to open Notepad correctly after {max_consecutive_failures} attempts")
+                sys.exit(1)
+            else:
+                print(f"[main] Attempt {consecutive_critical_failures}/{max_consecutive_failures}, retrying with next post...")
+                
         except Exception as e:
             failed += 1
+            consecutive_critical_failures = 0  # Non-critical errors don't count
             print(f"[main] ✗ Error processing post {post_id}: {e}")
             print(f"[main] Continuing with next post...")
 

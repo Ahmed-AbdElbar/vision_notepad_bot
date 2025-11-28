@@ -5,3 +5,4 @@ numpy
 requests
 pyautogui
 pygetwindow
+pyperclip
